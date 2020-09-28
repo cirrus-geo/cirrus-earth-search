@@ -1,6 +1,7 @@
-import pystac
+import os
 
 from dateutil.parser import parse
+import pystac
 from pystac.extensions.eo import Band
 from pystac.extensions.base import ItemExtension, ExtendedObject, ExtensionDefinition
 
@@ -249,7 +250,7 @@ def add_assets(item, base_url):
         'index',
         pystac.Asset(
             title = 'HTML Page',
-            href = base_url+'_index.html',
+            href = os.path.dirname(base_url) + '/index.html',
             media_type = 'application/html'
         )   
     )
