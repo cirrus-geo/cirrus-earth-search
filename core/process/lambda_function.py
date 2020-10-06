@@ -21,8 +21,13 @@ def lambda_handler(payload, context):
     # Read SQS payload
     if 'Records' not in payload:
         raise ValueError("Input not from SQS")
-    for catalog in [json.loads(r['body']) for r in payload['Records']]:
-        catalogs.append(catalog)
+    for record in [json.loads(r['body']) for r in payload['Records']]:
+        if 'Message' in record:
+            # SNS
+            catalogs.append(json.loads(record['Message']))
+        else:
+            # SQS
+            catalogs.append(record)
 
     # Make sure FeatureCollection, and Process block included
     cats = []
