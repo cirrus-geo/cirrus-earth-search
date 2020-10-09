@@ -59,6 +59,12 @@ def lambda_handler(payload, context={}):
         raise InvalidInput(msg)
     metadata = json.loads(resp.text)
 
+    if 'tileDataGeometry' in metadata:
+        coords = metadata['tileDataGeometry'].get('coordinates', [[]])
+        if len(coords) == 1 and len(coords[0]) == 0:
+            # if empty list then drop tileDataGeometry, will try to get from L1C
+            metadata.pop('tileDataGeometry')
+
     # if sentinel-s2-l2a we need to get cloud cover from sentinel-s2-l1c
     # so go ahead and publish that one as well
     if output_collection == 'sentinel-s2-l2a':
@@ -74,8 +80,13 @@ def lambda_handler(payload, context={}):
             _metadata = json.loads(resp.text)
 
             # tileDataGeometry in L2A but not in L1C
-            if 'tileDataGeometry' not in _metadata and 'tileDataGeometry' in metadata:
-                _metadata['tileDataGeometry'] = metadata['tileDataGeometry']
+            if 'tileDataGeometry' not in _metadata:
+                if 'tileDataGeometry' in metadata:
+                    _metadata['tileDataGeometry'] = metadata['tileDataGeometry']
+                else:
+                    msg = f"sentinel-to-stac: no valid data geometry available for {catalog['id']}"
+                    logger.error(msg)
+                    raise InvalidInput(msg)
 
             _item = sentinel_s2_l1c(_metadata, base_url.replace('sentinel-s2-l2a', 'sentinel-s2-l1c'))
             for a in ['thumbnail', 'info', 'metadata']:
@@ -91,6 +102,11 @@ def lambda_handler(payload, context={}):
             # tileDataGeometry in L1C but not L2A
             if 'tileDataGeometry' not in metadata and 'tileDataGeometry' in _metadata:
                 metadata['tileDataGeometry'] = _metadata['tileDataGeometry']
+
+    if 'tileDataGeometry' not in metadata:
+        msg = f"sentinel-to-stac: no valid data geometry available for {catalog['id']}"
+        logger.error(msg)
+        raise InvalidInput(msg)
 
     try:
         item = sentinel_s2_l2a(metadata, base_url)
