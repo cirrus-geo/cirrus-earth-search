@@ -99,7 +99,7 @@ def lambda_handler(payload, context={}):
 
     # tileDataGeometry not available
     if 'tileDataGeometry' not in metadata:
-        msg = f"sentinel-to-stac: no valid data geometry available"
+        msg = "sentinel-to-stac: no valid data geometry available"
         logger.error(msg)
         raise InvalidInput(msg)
 
