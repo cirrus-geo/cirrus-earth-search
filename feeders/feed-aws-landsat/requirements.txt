@@ -1,1 +1,1 @@
-cirrus-lib==0.1.3
+git+https://github.com/cirrus-geo/cirrus-lib.git@develop

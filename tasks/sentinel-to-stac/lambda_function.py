@@ -23,7 +23,6 @@ logger.addHandler(logging.StreamHandler())
 DATA_BUCKET = getenv('CIRRUS_DATA_BUCKET')
 
 
-
 def fetch_metadata(url):
     resp = requests.get(url, stream=True)
     if resp.status_code != 200:
@@ -39,6 +38,11 @@ def lambda_handler(payload, context={}):
     logger.debug('Payload: %s' % json.dumps(payload))
 
     catalog = Catalogs.from_payload(payload)[0]
+
+    try:
+        catalog.logger.info("catalog")
+    except Exception as err:
+        logger.info(err)
 
     items = []
     # get metadata
