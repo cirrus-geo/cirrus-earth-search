@@ -1,48 +1,27 @@
 #!/usr/bin/env python
-import boto3
 import json
-import logging
-import requests
+from os import getenv, environ, path as op
+from urllib.parse import urlparse
 
-from boto3 import Session
+import requests
 from boto3utils import s3
 from cirruslib import Catalogs
 from cirruslib.errors import InvalidInput
-from os import getenv, environ, path as op
 from stac_sentinel import sentinel_s2_l1c, sentinel_s2_l2a
-from shutil import rmtree
-from tempfile import mkdtemp
-from traceback import format_exc
-from urllib.parse import urlparse
-
-# configure logger - CRITICAL, ERROR, WARNING, INFO, DEBUG
-logger = logging.getLogger(__name__)
-logger.setLevel(getenv('CIRRUS_LOG_LEVEL', 'DEBUG'))
-logger.addHandler(logging.StreamHandler())
-
-DATA_BUCKET = getenv('CIRRUS_DATA_BUCKET')
 
 
-def fetch_metadata(url):
+def fetch_metadata(url, logger):
     resp = requests.get(url, stream=True)
     if resp.status_code != 200:
         msg = f"sentinel-to-stac: failed fetching {url} ({resp.text})"
-        logger.error(msg)
-        logger.error(format_exc())
+        logger.error(msg, exc_info=True)
         raise InvalidInput(msg)
     else:
         return json.loads(resp.text)
 
 
 def lambda_handler(payload, context={}):
-    logger.debug('Payload: %s' % json.dumps(payload))
-
     catalog = Catalogs.from_payload(payload)[0]
-
-    try:
-        catalog.logger.info("catalog")
-    except Exception as err:
-        logger.info(err)
 
     items = []
     # get metadata
@@ -55,7 +34,7 @@ def lambda_handler(payload, context={}):
 
     # TODO - handle getting from s3 as well as http?
     # get metadata
-    metadata = fetch_metadata(url)
+    metadata = fetch_metadata(url, catalog.logger)
 
     #if 'tileDataGeometry' in metadata:
     #    coords = metadata['tileDataGeometry'].get('coordinates', [[]])
@@ -66,7 +45,7 @@ def lambda_handler(payload, context={}):
     # need to get cloud cover from sentinel-s2-l1c since missing from l2a so fetch and publish l1c as well
     try:
         _url = url.replace('sentinel-s2-l2a', 'sentinel-s2-l1c')
-        l1c_metadata = fetch_metadata(_url)
+        l1c_metadata = fetch_metadata(_url, catalog.logger)
     except InvalidInput:
         l1c_metadata = None
 
@@ -77,7 +56,7 @@ def lambda_handler(payload, context={}):
                 l1c_metadata['tileDataGeometry'] = metadata['tileDataGeometry']
             else:
                 msg = "sentinel-to-stac: no valid data geometry available"
-                logger.error(msg)
+                catalog.logger.error(msg, exc_info=True)
                 raise InvalidInput(msg)
 
         try:
@@ -90,8 +69,7 @@ def lambda_handler(payload, context={}):
             items.append(_item)
         except Exception as err:
             msg = f"sentinel-to-stac: failed creating L1C STAC ({err})"
-            logger.error(msg)
-            logger.error(format_exc())
+            catalog.logger.error(msg, exc_info=True)
             raise InvalidInput(msg)
 
         # use L1C cloudyPixelPercentage
@@ -104,7 +82,7 @@ def lambda_handler(payload, context={}):
     # tileDataGeometry not available
     if 'tileDataGeometry' not in metadata:
         msg = "sentinel-to-stac: no valid data geometry available"
-        logger.error(msg)
+        catalog.logger.error(msg)
         raise InvalidInput(msg)
 
     try:
@@ -119,18 +97,16 @@ def lambda_handler(payload, context={}):
         items.append(item)
     except Exception as err:
         msg = f"sentinel-to-stac: failed creating STAC ({err})"
-        logger.error(msg)
-        logger.error(format_exc())
+        catalog.logger.error(msg, exc_info=True)
         raise InvalidInput(msg)
 
     # discard if crossing antimeridian
     if item['bbox'][2] - item['bbox'][0] > 300:
         msg = "sentinel-to-stac: crosses antimeridian, discarding"
-        logger.error(msg)
+        catalog.logger.error(msg)
         raise InvalidInput(msg)
 
     # update STAC catalog
     catalog['features'] = items
-    logger.debug(f"STAC Output: {json.dumps(catalog)}")
 
     return catalog
