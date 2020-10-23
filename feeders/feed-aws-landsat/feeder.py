@@ -44,7 +44,7 @@ PROCESS = {
 }
 
 
-def lambda_handler(payload, context={}):
+def handler(payload, context={}):
     logger.info('Payload: %s' % json.dumps(payload))
 
     urls = []

@@ -100,7 +100,7 @@ def submit_inventory_batch_jobs(inventory_url, lambda_arn, batch_size: int=10, m
     return n
 
 
-def lambda_handler(payload, context={}):
+def handler(payload, context={}):
     logger.info('Payload: %s' % json.dumps(payload))
 
     # process SNS topic arn:aws:sns:eu-central-1:214830741341:SentinelS2L2A if subscribed
