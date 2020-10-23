@@ -20,7 +20,7 @@ def fetch_metadata(url, logger):
         return json.loads(resp.text)
 
 
-def lambda_handler(payload, context={}):
+def handler(payload, context={}):
     catalog = Catalogs.from_payload(payload)[0]
 
     items = []

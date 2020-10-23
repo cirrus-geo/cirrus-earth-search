@@ -34,7 +34,7 @@ def fetch_url_as_text(url):
     return resp.text
 
 
-def lambda_handler(payload, context={}):
+def handler(payload, context={}):
     logger.debug('Payload: %s' % json.dumps(payload))
 
     catalog = Catalogs.from_payload(payload)[0]
@@ -158,4 +158,4 @@ if __name__ == "__main__":
             }
         }
     }
-    lambda_handler(payload)
+    handler(payload)
