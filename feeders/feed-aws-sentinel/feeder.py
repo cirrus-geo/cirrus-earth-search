@@ -12,17 +12,19 @@ from cirruslib.utils import submit_batch_job
 from datetime import datetime
 from os import getenv, path as op
 
-# configure logger - CRITICAL, ERROR, WARNING, INFO, DEBUG
-logger = logging.getLogger(__name__)
-logger.setLevel(getenv('CIRRUS_LOG_LEVEL', 'INFO'))
-
+# envvars
 SNS_TOPIC = getenv('CIRRUS_QUEUE_TOPIC_ARN')
 LAMBDA_NAME = getenv('AWS_LAMBDA_FUNCTION_NAME')
 CIRRUS_STACK = getenv('CIRRUS_STACK')
 CATALOG_BUCKET = getenv('CIRRUS_CATALOG_BUCKET')
 BASE_URL = "https://roda.sentinel-hub.com"
 
+# clients
 BATCH_CLIENT = boto3.client('batch')
+
+# logging
+logger = logging.getLogger(f"{__name__}.aws-sentinel")
+
 
 '''
 This feeder accepts a list of URLs to tileInfo.json files, or an SNS topic providing a list of update files
