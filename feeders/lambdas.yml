@@ -38,7 +38,7 @@ feed-aws-sentinel:
     handler: feeder.handler
     memorySize: 128
     timeout: 900
-    module: feeders/feed-aws-sentinel
+    module: feeders/aws-sentinel
     events:
         - sns:
             arn: arn:aws:sns:eu-central-1:214830741341:SentinelS2L2A
@@ -48,7 +48,7 @@ feed-aws-landsat:
     handler: feeder.handler
     memorySize: 128
     timeout: 900
-    module: feeders/feed-aws-landsat
+    module: feeders/aws-landsat
     events:
         - sns:
             arn: arn:aws:sns:us-west-2:274514004127:NewSceneHTML
