@@ -8,7 +8,7 @@ import landsat
 
 from boto3 import Session
 from boto3utils import s3
-from cirruslib import Catalogs
+from cirruslib import Catalog
 from cirruslib.errors import InvalidInput
 from dateutil.parser import parse
 from os import getenv, environ, path as op
@@ -37,7 +37,7 @@ def fetch_url_as_text(url):
 def handler(payload, context={}):
     logger.debug('Payload: %s' % json.dumps(payload))
 
-    catalog = Catalogs.from_payload(payload)[0]
+    catalog = Catalog.from_payload(payload)
 
     # TODO - make this more general for more items/collections
     assert(len(catalog['features']) == 1)
