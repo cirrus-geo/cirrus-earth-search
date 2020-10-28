@@ -23,7 +23,7 @@ def fetch_metadata(url, logger):
 def handler(payload, context={}):
     catalog = Catalog.from_payload(payload)
 
-    logger = get_task_logger(__name__, catalog=catalog)
+    logger = get_task_logger(f"{__name__}.sentinel-to-stac", catalog=catalog)
 
     items = []
     # get metadata
