@@ -4,7 +4,7 @@ service: cirrus
 # high level config
 provider:
   name: aws
-  stage: ${opt:stage, 'v0'}
+  stage: ${opt:stage, 'v1'}
   region: ${opt:region, 'us-west-2'}
   runtime: python3.7
   environment:
