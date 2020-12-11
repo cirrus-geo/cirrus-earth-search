@@ -98,17 +98,17 @@ resources:
   - ${file(tasks/batch-jobs.yml)}
   - ${file(core/basic-compute-environments.yml)}
   - ${file(core/custom-compute-environments.yml)}
-  - Resources:
-      Sentinel2L2ASubsciption:
-        Type: AWS::SNS::Subscription
-        Properties:
-          Endpoint: !GetAtt ProcessQueue.Arn
-          Protocol: sqs
-          Region: "#{AWS::Region}"
-          TopicArn: !Ref PublishTopic
-          FilterPolicy:
-            collection:
-              - sentinel-s2-l2a
+#  - Resources:
+#      Sentinel2L2ASubsciption:
+#        Type: AWS::SNS::Subscription
+#        Properties:
+#          Endpoint: !GetAtt ProcessQueue.Arn
+#          Protocol: sqs
+#          Region: "#{AWS::Region}"
+#          TopicArn: !Ref PublishTopic
+#          FilterPolicy:
+#            collection:
+#              - sentinel-s2-l2a
 
 package:
   individually: true
