@@ -4,10 +4,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [v0.4.2] - 2021-01-12
+
+### Added
+
+- Query parameters that allow for results sorting.
+
+### Fixed
+- stac-api feeder (broken when providing STAC API URL)
+- publish-test Lambda correctly logs
+
+## [v0.4.1] - 2020-11-19
+
+### Fixed
+- Error when trying to parse non standardized logging error output
+- Fixed `updated` index to allow for time filtering
+- Rerunning of catalogs in process task
+- Fixed creation of preview/thumbnails in add-preview task
+
+## [v0.4.0] - 2020-11-13
+
+### Added
+- API root now returns child links to summaries if configured in the Cirrus root catalog
+- `status` field added to attributes of published SNS messages, `created` if new STAC Item (not in Cirrus catalog), or `updated` if it already exists
+- `created` and `updated` properties added to STAC Items when adding to Cirrus static catalog on s3
 
 ### Changed
 - feeder.test Lambda moved to core/publish-test Lambda and defaults to being subscribed to the Cirrus Publish SNS. The Lambda only logs the payload
+- API changes: get single catalog is now `/<catid>`, collection names now include collections + workflow, Item response updated as detailed in cirrus-lib 0.4
+- State Schema changes, see `cirrus-lib`
+- `publish-test` moved to core lambdas, and auto subscribes to Cirrus endpoint
+- Feeders cleaned up, updated to cirrus-lib 0.4 where needed
 
 ## [v0.3.0] - 2020-10-26
 
@@ -86,6 +113,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 Initial release
 
 [Unreleased]: https://github.com/cirrus-geo/cirrus/compare/master...develop
+[v0.4.1]: https://github.com/cirrus-geo/cirrus-lib/compare/v0.4.0...v0.4.1
+[v0.4.0]: https://github.com/cirrus-geo/cirrus-lib/compare/v0.3.0...v0.4.0
 [v0.3.0]: https://github.com/cirrus-geo/cirrus-lib/compare/v0.2.1...v0.3.0
 [v0.2.1]: https://github.com/cirrus-geo/cirrus-lib/compare/v0.2.0...v0.2.1
 [v0.2.0]: https://github.com/cirrus-geo/cirrus-lib/compare/v0.1.0...v0.2.0

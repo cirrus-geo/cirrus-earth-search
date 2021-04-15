@@ -4,10 +4,13 @@ import os
 from copy import deepcopy
 from urllib.parse import urljoin, urlparse
 
-import boto3
+from boto3utils import s3
 from cirruslib import StateDB, stac, STATES
 
 logger = logging.getLogger(__name__)
+
+# envvars
+DATA_BUCKET = os.getenv('CIRRUS_DATA_BUCKET', None)
 
 # Cirrus state database
 statedb = StateDB()
@@ -15,12 +18,17 @@ statedb = StateDB()
 
 def response(body, status_code=200, headers={}):
     _headers = deepcopy(headers)
+    # cors
+    _headers.update({
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Credentials': True
+    })
     return {
         "statusCode": status_code,
         "headers": _headers,
         "body": json.dumps(body)
     }
-
+ 
 
 def create_link(url, title, rel, media_type='application/json'):
     return {
@@ -32,16 +40,18 @@ def create_link(url, title, rel, media_type='application/json'):
 
 
 def get_root(root_url):
-    cat = stac.ROOT_CATALOG.to_dict()
-    cat_url = urljoin(stac.ROOT_URL, "catalog.json")
+    cat_url = f"s3://{DATA_BUCKET}/catalog.json"
+    logger.debug(f"Root catalog: {cat_url}")
+    cat = s3().read_json(cat_url)
 
     links = []
-    for l in cat['links']:
-        if l['rel'] == 'child':
-            parts = urlparse(l['href'])
-            name = parts.path.split('/')[1]
-            link = create_link(urljoin(root_url, f"collections/{name}"), name, 'child')
+    workflows = cat.get('cirrus', {}).get('workflows', {})
+    for col in workflows:
+        for wf in workflows[col]:
+            name = f"{col} - {wf}"
+            link = create_link(urljoin(root_url, f"{col}/workflow-{wf}"), name, 'child')
             links.append(link)
+
     links.insert(0, create_link(root_url, "home", "self"))
     links.append(create_link(cat_url, "STAC", "stac"))
 
@@ -55,7 +65,7 @@ def get_root(root_url):
 
 
 def summary(collections_workflow, since, limit):
-    parts = collections_workflow.rsplit('/workflow-', maxsplit=1)
+    parts = collections_workflow.rsplit('_', maxsplit=1)
     logger.debug(f"Getting summary for {collections_workflow}")
     counts = {}
     for s in STATES:
@@ -81,7 +91,18 @@ def lambda_handler(event, context):
     # get path parameters
     stage = event.get('requestContext', {}).get('stage', '')
 
-    catid = event.get('path', '').lstrip('/').lstrip(stage).lstrip('/')
+    parts = [p for p in event.get('path', '').split('/') if p != '']
+    if len(parts) > 0 and parts[0] == stage:
+        parts = parts[1:]
+    catid = '/'.join(parts)
+
+    legacy = False
+    if catid.startswith('item'):
+        legacy = True
+        catid = catid.replace('item/', '', 1)
+    if catid.startswith('collections'):
+        legacy = True
+        catid = catid.replace('collections/', '', 1)
     logger.info(f"Path parameters: {catid}")
 
     # get query parameters
@@ -90,9 +111,11 @@ def lambda_handler(event, context):
     state = qparams.get('state', None)
     since = qparams.get('since', None)
     nextkey = qparams.get('nextkey', None)
-    limit = int(qparams.get('limit', 100))
-    count_limit = int(qparams.get('count_limit', 100000))
-    legacy = qparams.get('legacy', False)
+    limit = int(qparams.get('limit', 100000))
+    sort_ascending = bool(qparams.get('sort_ascending', None))
+    sort_index = qparams.get('sort_index', None)
+    #count_limit = int(qparams.get('count_limit', 100000))
+    #legacy = qparams.get('legacy', False)
 
     # root endpoint
     if catid == '':
@@ -110,29 +133,34 @@ def lambda_handler(event, context):
         # get items
         logger.debug(f"Getting items for {key['collections_workflow']}, state={state}, since={since}")
         items = statedb.get_items_page(key['collections_workflow'], state=state, since=since,
-                                        limit=limit, nextkey=nextkey)
+                                        limit=limit, nextkey=nextkey, sort_ascending=sort_ascending,
+                                        sort_index=sort_index)
         if legacy:
-            legacy_items = []
-            for item in items:
-                _item = {
-                    'catid': item['catid'],
-                    'input_collections': item['collections'],
-                    'state': item['state'],
-                    'created_at': item['created'],
-                    'updated_at': item['updated'],
-                    'input_catalog': item['catalog']
-                }
-                if 'executions' in item:
-                    _item['execution'] = item['executions'][-1]
-                if 'outputs' in item:
-                    _item['items'] = item['outputs']
-                if 'last_error' in item:
-                    _item['error_message'] = item['last_error']
-                legacy_items.append(_item)
-            items = legacy_items
+            items = [to_legacy(item) for item in items]
 
         return response(items)
     else:
         # get individual item
-        resp = statedb.dbitem_to_item(statedb.get_dbitem('/'.join(catid)))
-        return response(resp)
+        item = statedb.dbitem_to_item(statedb.get_dbitem(catid))
+        if legacy:
+            item = to_legacy(item)
+        return response(item)
+
+def to_legacy(item):
+    _item = {
+        'id': item['catid'],
+        'catid': item['catid'],
+        'input_collections': item['collections'],
+        'current_state': f"{item['state']}_{item['updated']}",
+        'state': item['state'],
+        'created_at': item['created'],
+        'updated_at': item['updated'],
+        'input_catalog': item['catalog']
+    }
+    if 'executions' in item:
+        _item['execution'] = item['executions'][-1]
+    if 'outputs' in item:
+        _item['items'] = item['outputs']
+    if 'last_error' in item:
+        _item['error_message'] = item['last_error']
+    return _item
