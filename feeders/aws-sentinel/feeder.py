@@ -67,7 +67,6 @@ even a single inventory file
 
 PROCESS = {
     "description": "Convert Original Sentinel-2 metadata to STAC and publish",
-    "input_collections": ["sentinel-s2-l2a-aws"],
     "workflow": "publish-sentinel",
     "output_options": {
         "path_template": "/${collection}/${sentinel:utm_zone}/${sentinel:latitude_band}/${sentinel:grid_square}/${year}/${month}/${id}",
@@ -104,6 +103,9 @@ def submit_inventory_batch_jobs(inventory_url, lambda_arn, batch_size: int=10, m
 
 def handler(payload, context={}):
     logger.info('Payload: %s' % json.dumps(payload))
+    logger.info('Context: %s' % json.dumps(context))
+
+    return
 
     # process SNS topic arn:aws:sns:eu-central-1:214830741341:SentinelS2L2A if subscribed
     if 'Records' in payload:
