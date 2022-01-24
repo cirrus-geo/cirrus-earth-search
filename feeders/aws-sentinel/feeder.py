@@ -8,15 +8,10 @@ import sys
 import uuid
 
 from boto3utils import s3
-from cirruslib.utils import submit_batch_job
-from datetime import datetime
 from os import getenv, path as op
 
 # envvars
 SNS_TOPIC = getenv('CIRRUS_QUEUE_TOPIC_ARN')
-LAMBDA_NAME = getenv('AWS_LAMBDA_FUNCTION_NAME')
-CIRRUS_STACK = getenv('CIRRUS_STACK')
-CATALOG_BUCKET = getenv('CIRRUS_CATALOG_BUCKET')
 BASE_URL = "https://roda.sentinel-hub.com"
 
 # clients
@@ -41,35 +36,13 @@ Payload of URLs to tileInfo.json files
     ]
 }
 
-OR
-
-define `latest_inventory` to get the complete most recent inventory and kick off 
-batch processes to process all the inventory files
-
-{
-    'latest_inventory": {
-
-    }
-}
-
-OR
-
-an s3 URL to an array of inventory files which will extract the tileInfo.json files
-and process them. This inherently assumes a batch process. A Lambda will timeout with
-even a single inventory file
-{
-    "inventory_files": [
-        "<s3-url>"
-    ]
-}
-
 '''
 
 PROCESS = {
     "description": "Convert Original Sentinel-2 metadata to STAC and publish",
     "workflow": "publish-sentinel",
     "output_options": {
-        "path_template": "/${collection}/${sentinel:utm_zone}/${sentinel:latitude_band}/${sentinel:grid_square}/${year}/${month}/${id}",
+        "path_template": "s3://earth-search/${collection}/${mgrs:utm_zone}/${mgrs:latitude_band}/${mgrs:grid_square}/${year}/${month}/${id}",
         "collections": {
             "sentinel-s2-l1c": ".*L1C",
             "sentinel-s2-l2a": ".*L2A"
@@ -83,58 +56,27 @@ PROCESS = {
 }
 
 
-def submit_inventory_batch_jobs(inventory_url, lambda_arn, batch_size: int=10, max_batches: int=-1):
-    urls = []
-    n = 0
-    for url in s3().latest_inventory_files(inventory_url):
-        urls.append(url)
-        if (len(urls) % batch_size) == 0:
-            submit_batch_job({'inventory_files': urls}, lambda_arn)
-            urls = []
-            n += 1
-            if max_batches > 0 and n > max_batches:
-                break
-    if len(urls) > 0:
-        submit_batch_job({'inventory_files': urls}, lambda_arn)
-        n += 1
-    logger.info(f"Submitted {n} jobs")
-    return n
-
-
 def handler(payload, context={}):
     logger.info('Payload: %s' % json.dumps(payload))
-    logger.info('Context: %s' % json.dumps(context))
 
-    return
+    topics = {
+        'NewSentinel2Product': 'sentinel-s2-l1c',
+        'SentinelS2L2A': 'sentinel-s2-l2a'
+    }
 
+    # arn:aws:sns:eu-west-1:214830741341:NewSentinel2Product
     # process SNS topic arn:aws:sns:eu-central-1:214830741341:SentinelS2L2A if subscribed
     if 'Records' in payload:
+        sns = payload['Records'][0]['Sns']
+        msg = json.loads(sns['Message'])
+        collection = topics.get(sns['TopicArn'].split(':')[-1], None)
+        if collection is None:
+            raise InvalidInput(f"Unknown collection for {sns['TopicArn']}")
         # TODO - determine input collection from payload
-        paths = [t['path'] for t in json.loads(payload['Records'][0]['Sns']['Message'])['tiles']]
+        paths = [t['path'] for t in msg['tiles']]
         payload = {
-            'urls': [f"{BASE_URL}/sentinel-s2-l2a/{p}/tileInfo.json" for p in paths]
+            'urls': [f"{BASE_URL}/{collection}/{p}/tileInfo.json" for p in paths]
         }
-
-    # get latest inventory and spawn batch(es)
-    latest_inventory = payload.get('latest_inventory', None)
-    if latest_inventory is not None:
-        return submit_inventory_batch_jobs(**latest_inventory)
-
-    # process inventory files (assumes this is batch!)
-    inventory_files = payload.get('inventory_files', None)
-    if inventory_files:
-        urls = []
-        for f in inventory_files:
-            filename = s3().download(f, path='/tmp')
-            with gzip.open(filename, 'rt') as f:
-                for line in f:
-                    if 'tileInfo.json' in line:
-                        parts = line.split(',')
-                        bucket = parts[0].strip('"')
-                        key = parts[1].strip('"')
-                        urls.append(f"{BASE_URL}/{bucket}/{key}")
-        logger.info(f"Extracted {len(urls)} URLs from {len(inventory_files)}")
-        payload['urls'] = urls
 
     catids = []
     if 'urls' in payload:
@@ -148,7 +90,7 @@ def handler(payload, context={}):
             item = {
                 'type': 'Feature',
                 'id': id,
-                'collection': 'sentinel-s2-l2a-aws',
+                'collection': f"{collection}-aws",
                 'properties': {},
                 'assets': {
                     'json': {

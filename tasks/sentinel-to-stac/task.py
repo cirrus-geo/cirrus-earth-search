@@ -27,6 +27,7 @@ def handler(payload, context={}):
 
     items = []
     # get metadata
+    collection = catalog['features'][0]['collection']
     url = catalog['features'][0]['assets']['json']['href'].rstrip()
     # if this is the FREE URL, get s3 base
     if url[0:5] == 'https':
@@ -38,67 +39,39 @@ def handler(payload, context={}):
     # get metadata
     metadata = fetch_metadata(url, logger)
 
-    #if 'tileDataGeometry' in metadata:
-    #    coords = metadata['tileDataGeometry'].get('coordinates', [[]])
-    #    if len(coords) == 1 and len(coords[0]) == 0:
-            # if empty list then drop tileDataGeometry, will try to get from L1C
-    #        metadata.pop('tileDataGeometry')
-
-    # need to get cloud cover from sentinel-s2-l1c since missing from l2a so fetch and publish l1c as well
-    try:
-        _url = url.replace('sentinel-s2-l2a', 'sentinel-s2-l1c')
-        l1c_metadata = fetch_metadata(_url, logger)
-    except InvalidInput:
-        l1c_metadata = None
-
-    if l1c_metadata is not None:
-        # tileDataGeometry in L2A but not in L1C
-        if 'tileDataGeometry' not in l1c_metadata:
-            if 'tileDataGeometry' in metadata:
-                l1c_metadata['tileDataGeometry'] = metadata['tileDataGeometry']
-            else:
-                msg = "sentinel-to-stac: no valid data geometry available"
-                logger.error(msg, exc_info=True)
-                raise InvalidInput(msg)
-
-        try:
-            _item = sentinel_s2_l1c(l1c_metadata, base_url.replace('sentinel-s2-l2a', 'sentinel-s2-l1c'))
-            for a in ['thumbnail', 'info', 'metadata']:
-                _item['assets'][a]['href'] = _item['assets'][a]['href'].replace('s3:/', 'https://roda.sentinel-hub.com')
-            # if dataCoveragePercentage not in L1 data, try getting from L2
-            if 'dataCoveragePercentage' not in l1c_metadata and 'dataCoveragePercentage' in metadata:
-                _item['properties']['sentinel:data_coverage'] = float(metadata['dataCoveragePercentage'])
-            items.append(_item)
-        except Exception as err:
-            msg = f"sentinel-to-stac: failed creating L1C STAC ({err})"
-            logger.error(msg, exc_info=True)
-            raise InvalidInput(msg)
-
-        # use L1C cloudyPixelPercentage
-        metadata['cloudyPixelPercentage'] = l1c_metadata['cloudyPixelPercentage']
-
-        # tileDataGeometry in L1C but not L2A
-        if 'tileDataGeometry' not in metadata and 'tileDataGeometry' in l1c_metadata:
-            metadata['tileDataGeometry'] = l1c_metadata['tileDataGeometry']
-
     # tileDataGeometry not available
     if 'tileDataGeometry' not in metadata:
         msg = "sentinel-to-stac: no valid data geometry available"
-        logger.error(msg)
+        logger.error(msg, exc_info=True)
         raise InvalidInput(msg)
 
     try:
-        item = sentinel_s2_l2a(metadata, base_url)
+        if collection == 'sentinel-s2-l1c-aws':
+            item = sentinel_s2_l1c(metadata, base_url)
+        else:
+            item = sentinel-s2-l2a(metadata, base_url)
         for a in ['thumbnail', 'info', 'metadata']:
             item['assets'][a]['href'] = item['assets'][a]['href'].replace('s3:/', 'https://roda.sentinel-hub.com')
 
-        if l1c_metadata is not None:
-            item['properties']['sentinel:valid_cloud_cover'] = True
-        else:
-            item['properties']['sentinel:valid_cloud_cover'] = False
+        # update to STAC 1.0.0-rc.3
+        item['stac_version'] = '1.0.0-rc.3'
+        item['stac_extensions'] = [
+            'https://stac-extensions.github.io/eo/v1.0.0/schema.json',
+            'https://stac-extensions.github.io/view/v1.0.0/schema.json',
+            'https://stac-extensions.github.io/projection/v1.0.0/schema.json',
+            'https://stac-extensions.github.io/mgrs/v1.0.0/schema.json'
+        ]
+        item['properties']['mgrs:latitude_band'] = item['properties']['sentinel:latitude_band']
+        item['properties']['mgrs:grid_square'] = item['properties']['sentinel:grid_square']
+        item['properties']['mgrs:utm_zone'] = item['properties']['sentinel:utm_zone']
+        del item['properties']['sentinel:latitude_band']
+        del item['properties']['sentinel:grid_square']
+        del item['properties']['sentinel:utm_zone']
+        item['assets']['visual'] = item['assets'].pop('overview')
+        item['assets']['visual']['roles'] = ['visual']
         items.append(item)
     except Exception as err:
-        msg = f"sentinel-to-stac: failed creating STAC ({err})"
+        msg = f"sentinel-to-stac: failed creating L1C STAC ({err})"
         logger.error(msg, exc_info=True)
         raise InvalidInput(msg)
 
