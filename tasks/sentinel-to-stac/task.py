@@ -96,6 +96,8 @@ def handler(payload, context={}):
             item['properties']['sentinel:valid_cloud_cover'] = True
         else:
             item['properties']['sentinel:valid_cloud_cover'] = False
+        pid = item['properties']['sentinel:product_id']
+        item['properties']['sentinel:processing_baseline'] = f"{pid[28:30]}.{pid[30:32]}"
         items.append(item)
     except Exception as err:
         msg = f"sentinel-to-stac: failed creating STAC ({err})"
